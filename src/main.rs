@@ -1,4 +1,4 @@
-use clap::{arg, command, Command, Parser};
+use clap::{arg, command, Parser};
 use std::fs::File;
 
 use symphonia::core::audio::SampleBuffer;
@@ -17,11 +17,13 @@ struct FftResampler {
     file: String,
 
     /// Width of the output image
-    #[arg(short, long, default_value = "256")]
-    x: u32,
-    /// Height of the output image
-    #[arg(short, long, default_value = "256")]
-    y: u32,
+    /// Controls the number of frequency bins
+    #[arg(short, long, default_value = "64")]
+    width: u32,
+
+    /// Speed of the input audio
+    #[arg(short, long, default_value = "160")]
+    bpm: f32,
 }
 
 fn main() {
@@ -62,51 +64,56 @@ fn main() {
 
     let mut sample_count = 0;
     let mut sample_buf = None;
+    let mut all_samples = Vec::new();
 
     loop {
         // Get the next packet from the format reader.
-        let packet = format.next_packet().unwrap();
-
-        // If the packet does not belong to the selected track, skip it.
-        if packet.track_id() != track_id {
-            continue;
-        }
-
-        // Decode the packet into audio samples, ignoring any decode errors.
-        match decoder.decode(&packet) {
-            Ok(audio_buf) => {
-                // The decoded audio samples may now be accessed via the audio buffer if per-channel
-                // slices of samples in their native decoded format is desired. Use-cases where
-                // the samples need to be accessed in an interleaved order or converted into
-                // another sample format, or a byte buffer is required, are covered by copying the
-                // audio buffer into a sample buffer or raw sample buffer, respectively. In the
-                // example below, we will copy the audio buffer into a sample buffer in an
-                // interleaved order while also converting to a f32 sample format.
-
-                // If this is the *first* decoded packet, create a sample buffer matching the
-                // decoded audio buffer format.
-                if sample_buf.is_none() {
-                    // Get the audio buffer specification.
-                    let spec = *audio_buf.spec();
-
-                    // Get the capacity of the decoded buffer. Note: This is capacity, not length!
-                    let duration = audio_buf.capacity() as u64;
-
-                    // Create the f32 sample buffer.
-                    sample_buf = Some(SampleBuffer::<f32>::new(duration, spec));
-                }
-
-                // Copy the decoded audio buffer into the sample buffer in an interleaved format.
-                if let Some(buf) = &mut sample_buf {
-                    buf.copy_interleaved_ref(audio_buf);
-
-                    // The samples may now be access via the `samples()` function.
-                    sample_count += buf.samples().len();
-                    print!("\rDecoded {} samples", sample_count);
-                }
+        if let Ok(packet) = format.next_packet() {
+            // If the packet does not belong to the selected track, skip it.
+            if packet.track_id() != track_id {
+                continue;
             }
-            Err(Error::DecodeError(_)) => (),
-            Err(_) => break,
+
+            // Decode the packet into audio samples, ignoring any decode errors.
+            match decoder.decode(&packet) {
+                Ok(audio_buf) => {
+                    // The decoded audio samples may now be accessed via the audio buffer if per-channel
+                    // slices of samples in their native decoded format is desired. Use-cases where
+                    // the samples need to be accessed in an interleaved order or converted into
+                    // another sample format, or a byte buffer is required, are covered by copying the
+                    // audio buffer into a sample buffer or raw sample buffer, respectively. In the
+                    // example below, we will copy the audio buffer into a sample buffer in an
+                    // interleaved order while also converting to a f32 sample format.
+
+                    // If this is the *first* decoded packet, create a sample buffer matching the
+                    // decoded audio buffer format.
+                    if sample_buf.is_none() {
+                        // Get the audio buffer specification.
+                        let spec = *audio_buf.spec();
+
+                        // Get the capacity of the decoded buffer. Note: This is capacity, not length!
+                        let duration = audio_buf.capacity() as u64;
+
+                        // Create the f32 sample buffer.
+                        sample_buf = Some(SampleBuffer::<f32>::new(duration, spec));
+                    }
+
+                    // Copy the decoded audio buffer into the sample buffer in an interleaved format.
+                    if let Some(buf) = &mut sample_buf {
+                        buf.copy_interleaved_ref(audio_buf);
+
+                        // The samples may now be access via the `samples()` function.
+                        sample_count += buf.samples().len();
+                        all_samples.extend_from_slice(buf.samples());
+                        print!("\rDecoded {} samples", sample_count);
+                    }
+                }
+                Err(Error::DecodeError(_)) => (),
+                Err(_) => break,
+            }
+        } else {
+            break;
         }
     }
+    println!("\nFinished, with {} samples", all_samples.len());
 }
