@@ -9,3 +9,4 @@ edition = "2021"
 symphonia = { version = "0.5.4", features = ["all-codecs"] }
 clap = { version = "4.5.2", features = ["derive"] }
 image = "0.25.0"
+spectrum-analyzer = "1.5.0"
