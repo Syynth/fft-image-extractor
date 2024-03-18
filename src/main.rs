@@ -114,14 +114,14 @@ fn main() {
 
     // Find the nearest power of two to the total width
     let nearest_w = nearest_power_of_two_below(total_width as u32);
-    let w: usize = nearest_w as usize / 2; // width of a single row
+    let w: usize = nearest_w as usize / 4; // width of a single row
 
     let img_row_height = h;
     let row_count: u32 = (total_width / w) as u32 + 1;
 
     let img_height = img_row_height * row_count;
 
-    let mut img = ImageBuffer::new(w as u32, nearest_power_of_two_above(img_height));
+    let mut img = ImageBuffer::new(w as u32, img_height);
 
     let freq_min: f32 = 20.0; // Minimum frequency (Hz)
 
